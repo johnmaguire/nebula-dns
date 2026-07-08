@@ -151,8 +151,8 @@ func mainWithErr() error {
 				managed[hostname] = types
 			}
 
-			// For any hosts within the target zone that do not have a corresponding
-			// host in Defined Networking, delete the A record
+			// For any records within the target zone that do not have a corresponding
+			// host in Defined Networking, delete the record
 			if cfg.Prune == "all" || cfg.Prune == "network" {
 				log.Info().Str("zoneID", zoneID).Str("mode", cfg.Prune).
 					Msg("Pruning Cloudflare DNS records")
