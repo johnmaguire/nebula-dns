@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	"github.com/cloudflare/cloudflare-go"
 )
@@ -46,20 +47,36 @@ func IterateRecords(cf *cloudflare.API, zoneID string, fn func(record Record) er
 	return nil
 }
 
+// RecordTypeForIP returns "A" for an IPv4 address and "AAAA" for an IPv6 address.
+func RecordTypeForIP(ip netip.Addr) string {
+	if ip.Is4() {
+		return "A"
+	}
+	return "AAAA"
+}
+
 func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string) error {
-	// Check if the record already exists
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return fmt.Errorf("failed to parse IP %q: %w", ip, err)
+	}
+	recordType := RecordTypeForIP(addr)
+
+	// Look up an existing record matching both name and type. Cloudflare allows
+	// an A and an AAAA at the same name; we update only the one whose family
+	// matches this IP.
 	recs, _, err := cf.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.ListDNSRecordsParams{
 		Name: hostname,
+		Type: recordType,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list DNS records: %w", err)
 	}
 
 	if len(recs) > 0 {
-		// update the record
 		_, err := cf.UpdateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.UpdateDNSRecordParams{
 			ID:      recs[0].ID,
-			Type:    "A",
+			Type:    recordType,
 			Name:    hostname,
 			Content: ip,
 			TTL:     1,
@@ -70,7 +87,7 @@ func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string)
 		}
 	} else {
 		_, err := cf.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.CreateDNSRecordParams{
-			Type:    "A",
+			Type:    recordType,
 			Name:    hostname,
 			Content: ip,
 			TTL:     1,

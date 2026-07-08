@@ -10,17 +10,17 @@ import (
 )
 
 type Host struct {
-	ID        string   `json:"id"`
-	IPAddress string   `json:"ipAddress"`
-	Hostname  string   `json:"name"`
-	Tags      []string `json:"tags"`
+	ID          string   `json:"id"`
+	IPAddresses []string `json:"ipAddresses"`
+	Hostname    string   `json:"name"`
+	Tags        []string `json:"tags"`
 }
 
 type hostsResponse struct {
 	Data     []Host `json:"data"`
 	Metadata struct {
 		HasNextPage bool   `json:"hasNextPage"`
-		Cursor      string `json:"cursor"`
+		NextCursor  string `json:"nextCursor"`
 	} `json:"metadata"`
 }
 
@@ -50,28 +50,35 @@ func dnRequest(dnToken string, method string, path string, query url.Values) (*h
 	return resp, nil
 }
 
-func GetNetworkCIDR(dnToken string, networkID string) (netip.Prefix, error) {
-	resp, err := dnRequest(dnToken, "GET", fmt.Sprintf("/v1/networks/%s", networkID), nil)
+func GetNetworkCIDRs(dnToken string, networkID string) ([]netip.Prefix, error) {
+	resp, err := dnRequest(dnToken, "GET", fmt.Sprintf("/v2/networks/%s", networkID), nil)
 	if err != nil {
-		return netip.Prefix{}, err
+		return nil, err
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return netip.Prefix{}, err
+		return nil, err
 	}
 
 	var res struct {
 		Data struct {
-			CIDR string `json:"cidr"`
+			CIDRs []string `json:"cidrs"`
 		} `json:"data"`
 	}
-	err = json.Unmarshal(body, &res)
-	if err != nil {
-		return netip.Prefix{}, err
+	if err := json.Unmarshal(body, &res); err != nil {
+		return nil, err
 	}
 
-	return netip.ParsePrefix(res.Data.CIDR)
+	prefixes := make([]netip.Prefix, 0, len(res.Data.CIDRs))
+	for _, c := range res.Data.CIDRs {
+		p, err := netip.ParsePrefix(c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CIDR %q: %w", c, err)
+		}
+		prefixes = append(prefixes, p)
+	}
+	return prefixes, nil
 }
 
 func FilterHosts(dnToken string, filterFunc func(Host) bool) ([]Host, error) {
@@ -85,7 +92,7 @@ func FilterHosts(dnToken string, filterFunc func(Host) bool) ([]Host, error) {
 			"pageSize": []string{"500"},
 		}
 
-		resp, err := dnRequest(dnToken, "GET", "/v1/hosts", params)
+		resp, err := dnRequest(dnToken, "GET", "/v2/hosts", params)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +120,7 @@ func FilterHosts(dnToken string, filterFunc func(Host) bool) ([]Host, error) {
 		if !respHosts.Metadata.HasNextPage {
 			break
 		}
-		cursor = respHosts.Metadata.Cursor
+		cursor = respHosts.Metadata.NextCursor
 	}
 
 	return hosts, nil

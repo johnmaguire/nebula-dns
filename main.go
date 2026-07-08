@@ -74,12 +74,16 @@ func mainWithErr() error {
 			}
 			log.Info().Str("zoneID", zoneID).Msgf("Found Cloudflare zone ID for %s", cfg.Cloudflare.ZoneName)
 
-			// Get the network CIDR for the network we're interested in
-			cidr, err := GetNetworkCIDR(cfg.DefinedNet.APIToken, cfg.DefinedNet.NetworkID)
+			// Get the network CIDRs (IPv4 and, when present, IPv6) for the network we're interested in
+			cidrs, err := GetNetworkCIDRs(cfg.DefinedNet.APIToken, cfg.DefinedNet.NetworkID)
 			if err != nil {
-				return fmt.Errorf("failed to get network CIDR: %w", err)
+				return fmt.Errorf("failed to get network CIDRs: %w", err)
 			}
-			log.Info().Str("networkCIDR", cidr.String()).Msgf("Found network CIDR for network %s", cfg.DefinedNet.NetworkID)
+			cidrStrs := make([]string, len(cidrs))
+			for i, c := range cidrs {
+				cidrStrs[i] = c.String()
+			}
+			log.Info().Strs("networkCIDRs", cidrStrs).Msgf("Found network CIDRs for network %s", cfg.DefinedNet.NetworkID)
 
 			// Filter the DN hosts based on the following criteria:
 			// - Presence of a specific tag (e.g. "public-dns:yes")
@@ -117,9 +121,11 @@ func mainWithErr() error {
 
 			log.Info().Int("eligibleHosts", len(hosts)).Msgf("Found %d eligible hosts", len(hosts))
 
-			// Create an A record for each host that matches the criteria pointing to
-			// the host's IP address. Create a map of valid hostnames as we go.
-			hostnames := map[string]struct{}{}
+			// Create an A record per IPv4 address and an AAAA record per IPv6 address
+			// for each host that matches the criteria. Track managed records by
+			// (hostname, recordType) so pruning can delete stale records (e.g. an
+			// AAAA at a name whose host no longer has an IPv6 address).
+			managed := map[string]map[string]struct{}{}
 			for _, host := range hosts {
 				hostname := host.Hostname
 				l := log.Info().Str("initialHostname", hostname)
@@ -129,16 +135,23 @@ func mainWithErr() error {
 				}
 				hostname = strings.ToLower(hostname + "." + cfg.AppendSuffix)
 				l.Str("finalHostname", hostname).
-					Str("ipAddress", host.IPAddress).
-					Msg("Creating Cloudflare DNS record")
+					Strs("ipAddresses", host.IPAddresses).
+					Msg("Creating Cloudflare DNS records")
 
-				err := CreateRecord(cf, zoneID, hostname, host.IPAddress)
-				if err != nil {
-					// TODO: Log the error and continue
-					return fmt.Errorf("failed to create record: %w", err)
+				types := map[string]struct{}{}
+				for _, ip := range host.IPAddresses {
+					addr, err := netip.ParseAddr(ip)
+					if err != nil {
+						return fmt.Errorf("failed to parse host IP %s: %w", ip, err)
+					}
+					if err := CreateRecord(cf, zoneID, hostname, ip); err != nil {
+						// TODO: Log the error and continue
+						return fmt.Errorf("failed to create record for %s -> %s: %w", hostname, ip, err)
+					}
+					types[RecordTypeForIP(addr)] = struct{}{}
 				}
 
-				hostnames[hostname] = struct{}{}
+				managed[hostname] = types
 			}
 
 			// For any hosts within the target zone that do not have a corresponding
@@ -152,30 +165,43 @@ func mainWithErr() error {
 						return nil
 					}
 
-					if _, ok := hostnames[r.Name]; !ok {
-						// In network mode, only prune A records within the Nebula CIDR
-						if cfg.Prune == "network" {
-							if r.Type != "A" {
-								return nil
-							}
+					// Keep records we manage at this exact (name, type).
+					if types, ok := managed[r.Name]; ok {
+						if _, ok := types[r.Type]; ok {
+							return nil
+						}
+					}
 
-							ip, err := netip.ParseAddr(r.Content)
-							if err != nil {
-								return fmt.Errorf("failed to parse IP address from record content: %w", err)
-							}
-							if !cidr.Contains(ip) {
-								return nil
-							}
+					// In network mode, only prune A/AAAA records whose IP falls within
+					// one of the Nebula network's CIDRs.
+					if cfg.Prune == "network" {
+						if r.Type != "A" && r.Type != "AAAA" {
+							return nil
 						}
 
-						log.Info().Str("recordID", r.ID).
-							Str("recordName", r.Name).
-							Msg("Pruning stale DNS record")
-
-						err := DeleteRecord(cf, zoneID, r.ID)
+						ip, err := netip.ParseAddr(r.Content)
 						if err != nil {
-							return fmt.Errorf("failed to delete record: %w", err)
+							return fmt.Errorf("failed to parse IP address from record content: %w", err)
 						}
+						inNetwork := false
+						for _, c := range cidrs {
+							if c.Contains(ip) {
+								inNetwork = true
+								break
+							}
+						}
+						if !inNetwork {
+							return nil
+						}
+					}
+
+					log.Info().Str("recordID", r.ID).
+						Str("recordName", r.Name).
+						Str("recordType", r.Type).
+						Msg("Pruning stale DNS record")
+
+					if err := DeleteRecord(cf, zoneID, r.ID); err != nil {
+						return fmt.Errorf("failed to delete record: %w", err)
 					}
 
 					return nil
