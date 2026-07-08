@@ -140,15 +140,12 @@ func mainWithErr() error {
 
 				types := map[string]struct{}{}
 				for _, ip := range host.IPAddresses {
-					addr, err := netip.ParseAddr(ip)
+					recordType, err := CreateRecord(cf, zoneID, hostname, ip)
 					if err != nil {
-						return fmt.Errorf("failed to parse host IP %s: %w", ip, err)
-					}
-					if err := CreateRecord(cf, zoneID, hostname, ip); err != nil {
 						// TODO: Log the error and continue
 						return fmt.Errorf("failed to create record for %s -> %s: %w", hostname, ip, err)
 					}
-					types[RecordTypeForIP(addr)] = struct{}{}
+					types[recordType] = struct{}{}
 				}
 
 				managed[hostname] = types

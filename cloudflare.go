@@ -55,10 +55,12 @@ func RecordTypeForIP(ip netip.Addr) string {
 	return "AAAA"
 }
 
-func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string) error {
+// CreateRecord upserts an A or AAAA record (chosen by IP family) and returns
+// the record type it wrote.
+func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string) (string, error) {
 	addr, err := netip.ParseAddr(ip)
 	if err != nil {
-		return fmt.Errorf("failed to parse IP %q: %w", ip, err)
+		return "", fmt.Errorf("failed to parse IP %q: %w", ip, err)
 	}
 	recordType := RecordTypeForIP(addr)
 
@@ -70,7 +72,7 @@ func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string)
 		Type: recordType,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to list DNS records: %w", err)
+		return "", fmt.Errorf("failed to list DNS records: %w", err)
 	}
 
 	if len(recs) > 0 {
@@ -83,7 +85,7 @@ func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string)
 			Proxied: cloudflare.BoolPtr(false),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to update DNS record: %w", err)
+			return "", fmt.Errorf("failed to update DNS record: %w", err)
 		}
 	} else {
 		_, err := cf.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(zoneID), cloudflare.CreateDNSRecordParams{
@@ -94,11 +96,11 @@ func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string)
 			Proxied: cloudflare.BoolPtr(false),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create DNS record: %w", err)
+			return "", fmt.Errorf("failed to create DNS record: %w", err)
 		}
 	}
 
-	return nil
+	return recordType, nil
 }
 
 func DeleteRecord(cf *cloudflare.API, zoneID string, recordID string) error {
