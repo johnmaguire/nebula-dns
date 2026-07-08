@@ -169,13 +169,15 @@ func mainWithErr() error {
 						}
 					}
 
-					// In network mode, only prune A/AAAA records whose IP falls within
-					// one of the Nebula network's CIDRs.
-					if cfg.Prune == "network" {
-						if r.Type != "A" && r.Type != "AAAA" {
-							return nil
-						}
+					// This tool only ever creates A/AAAA records, so never prune other
+					// record types (CNAME, TXT, MX, ...) even in "all" mode.
+					if r.Type != "A" && r.Type != "AAAA" {
+						return nil
+					}
 
+					// In network mode, further restrict pruning to records whose IP
+					// falls within one of the Nebula network's CIDRs.
+					if cfg.Prune == "network" {
 						ip, err := netip.ParseAddr(r.Content)
 						if err != nil {
 							return fmt.Errorf("failed to parse IP address from record content: %w", err)
