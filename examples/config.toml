@@ -4,9 +4,10 @@ required_tags = ["publish:yes"]
 # required_suffix will only register hosts with this domain (must match the
 # full domain suffix.) Optional.
 required_suffix = ""
-# trim_suffix will remove the domain from the hostname (e.g. host.example.com
-# will become host)
-trim_suffix = true
+# trim_suffix removes this domain suffix from the hostname (e.g. "example.com"
+# turns host.example.com into host, but leaves host.internal untouched.)
+# Leave empty to disable trimming.
+trim_suffix = "example.com"
 # append_suffix will append the domain to the hostname (e.g. host will become
 # host.example.com.) This step occurs after trim_suffix, so you can convert
 # host.example.com to host.nebula.example.com, for example.

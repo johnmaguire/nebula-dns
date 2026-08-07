@@ -26,7 +26,7 @@ All configuration can be provided via environment variables, making the config f
 | `NEBULA_DNS_DN_NETWORK_ID` | Defined Networking network ID |
 | `NEBULA_DNS_REQUIRED_TAGS` | Comma-separated list of required host tags |
 | `NEBULA_DNS_REQUIRED_SUFFIX` | Only register hosts with this hostname suffix |
-| `NEBULA_DNS_TRIM_SUFFIX` | Trim domain from DN hostname (`true`/`false`) |
+| `NEBULA_DNS_TRIM_SUFFIX` | Domain suffix to strip from DN hostname (e.g. `example.com`) |
 | `NEBULA_DNS_APPEND_SUFFIX` | Suffix to append to hostname (defaults to zone name) |
 | `NEBULA_DNS_PRUNE` | Prune mode: `none` (default), `all`, or `network` |
 
@@ -51,7 +51,7 @@ services:
       - NEBULA_DNS_DN_API_TOKEN=your-dn-token
       - NEBULA_DNS_DN_NETWORK_ID=your-network-id
       - NEBULA_DNS_REQUIRED_TAGS=publish:yes
-      - NEBULA_DNS_TRIM_SUFFIX=true
+      - NEBULA_DNS_TRIM_SUFFIX=example.com
       - NEBULA_DNS_PRUNE=network
       - NEBULA_DNS_SCHEDULE=*/5 * * * *
 ```

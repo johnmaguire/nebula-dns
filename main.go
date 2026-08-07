@@ -129,8 +129,8 @@ func mainWithErr() error {
 			for _, host := range hosts {
 				hostname := host.Hostname
 				l := log.Info().Str("initialHostname", hostname)
-				if cfg.TrimSuffix {
-					hostname = trimSuffix(hostname)
+				if cfg.TrimSuffix != "" {
+					hostname = trimSuffix(hostname, cfg.TrimSuffix)
 					l = l.Str("trimmedHostname", hostname)
 				}
 				hostname = strings.ToLower(hostname + "." + cfg.AppendSuffix)
@@ -221,9 +221,14 @@ func mainWithErr() error {
 	return nil
 }
 
-func trimSuffix(s string) string {
-	if idx := strings.Index(s, "."); idx != -1 {
-		return s[:idx]
+// trimSuffix removes suffix (leading dot optional) and its joining dot from
+// hostname, comparing case-insensitively. Hostnames that do not end in the
+// suffix at a label boundary, or that consist solely of it, are returned
+// unchanged.
+func trimSuffix(hostname, suffix string) string {
+	suffix = "." + strings.TrimPrefix(suffix, ".")
+	if len(hostname) > len(suffix) && strings.EqualFold(hostname[len(hostname)-len(suffix):], suffix) {
+		return hostname[:len(hostname)-len(suffix)]
 	}
-	return s
+	return hostname
 }

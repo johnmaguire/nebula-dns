@@ -16,9 +16,11 @@ type AppConfig struct {
 	// order for a DNS record to be created for it.
 	RequiredSuffix string `toml:"required_suffix" envconfig:"NEBULA_DNS_REQUIRED_SUFFIX"`
 
-	// TrimSuffix determines whether to trim everything after the first . in
-	// the DN hostname before creating the DNS record.
-	TrimSuffix bool `toml:"trim_suffix" envconfig:"NEBULA_DNS_TRIM_SUFFIX"`
+	// TrimSuffix is a domain suffix to strip from the DN hostname before
+	// creating the DNS record (e.g. "example.com" turns host.example.com
+	// into host, but leaves host.internal untouched). A leading dot is
+	// optional. Empty disables trimming.
+	TrimSuffix string `toml:"trim_suffix" envconfig:"NEBULA_DNS_TRIM_SUFFIX"`
 	// AppendSuffix is the suffix to append to the hostname from DN before
 	// creating the DNS record (occurs after TrimSuffix.)
 	AppendSuffix string `toml:"append_suffix" envconfig:"NEBULA_DNS_APPEND_SUFFIX"`
@@ -90,6 +92,10 @@ func (c *AppConfig) validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config fields: %s", strings.Join(missing, ", "))
+	}
+	switch strings.ToLower(c.TrimSuffix) {
+	case "true", "false":
+		return fmt.Errorf("trim_suffix must be a domain suffix to strip (e.g. \"example.com\"), got %q", c.TrimSuffix)
 	}
 	switch c.Prune {
 	case "", "none", "all", "network":

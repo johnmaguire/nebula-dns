@@ -9,7 +9,7 @@ import (
 const validTOML = `
 required_tags = ["publish:yes"]
 required_suffix = ".example.com"
-trim_suffix = true
+trim_suffix = "example.com"
 append_suffix = "nebula.example.com"
 prune = "network"
 
@@ -54,8 +54,8 @@ func TestLoadConfig_FromFile(t *testing.T) {
 	if cfg.AppendSuffix != "nebula.example.com" {
 		t.Errorf("AppendSuffix = %q, want %q", cfg.AppendSuffix, "nebula.example.com")
 	}
-	if !cfg.TrimSuffix {
-		t.Error("TrimSuffix = false, want true")
+	if cfg.TrimSuffix != "example.com" {
+		t.Errorf("TrimSuffix = %q, want %q", cfg.TrimSuffix, "example.com")
 	}
 	if cfg.Prune != "network" {
 		t.Errorf("Prune = %q, want %q", cfg.Prune, "network")
@@ -73,7 +73,7 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 
 	t.Setenv("NEBULA_DNS_CF_API_TOKEN", "env-cf-token")
 	t.Setenv("NEBULA_DNS_DN_NETWORK_ID", "env-net-456")
-	t.Setenv("NEBULA_DNS_TRIM_SUFFIX", "false")
+	t.Setenv("NEBULA_DNS_TRIM_SUFFIX", "env.example.com")
 
 	cfg, err := LoadConfig(path)
 	if err != nil {
@@ -86,8 +86,8 @@ func TestLoadConfig_EnvOverridesFile(t *testing.T) {
 	if cfg.DefinedNet.NetworkID != "env-net-456" {
 		t.Errorf("DefinedNet.NetworkID = %q, want %q", cfg.DefinedNet.NetworkID, "env-net-456")
 	}
-	if cfg.TrimSuffix {
-		t.Error("TrimSuffix = true, want false (overridden by env)")
+	if cfg.TrimSuffix != "env.example.com" {
+		t.Errorf("TrimSuffix = %q, want %q (overridden by env)", cfg.TrimSuffix, "env.example.com")
 	}
 	// Unset fields should retain file values
 	if cfg.DefinedNet.APIToken != "dn-token" {
@@ -162,6 +162,15 @@ api_token = "cf-token"
 zone_name = "example.com"
 [definednet]
 api_token = "dn-token"
+`},
+		{"boolean trim_suffix", `
+trim_suffix = "true"
+[cloudflare]
+api_token = "cf-token"
+zone_name = "example.com"
+[definednet]
+api_token = "dn-token"
+network_id = "net-123"
 `},
 	}
 
