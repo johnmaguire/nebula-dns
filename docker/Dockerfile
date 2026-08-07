@@ -13,6 +13,13 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-X main.versi
 
 FROM alpine:3
 
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="nebula-dns" \
+      org.opencontainers.image.description="Create Cloudflare DNS records for your Defined Networking hosts" \
+      org.opencontainers.image.source="https://github.com/johnmaguire/nebula-dns" \
+      org.opencontainers.image.url="https://github.com/johnmaguire/nebula-dns" \
+      org.opencontainers.image.version="${VERSION}"
+
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /nebula-dns /usr/local/bin/nebula-dns
