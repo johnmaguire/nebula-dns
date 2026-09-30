@@ -57,12 +57,9 @@ func RecordTypeForIP(ip netip.Addr) string {
 
 // CreateRecord upserts an A or AAAA record (chosen by IP family) and returns
 // the record type it wrote.
-func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, ip string) (string, error) {
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse IP %q: %w", ip, err)
-	}
+func CreateRecord(cf *cloudflare.API, zoneID string, hostname string, addr netip.Addr) (string, error) {
 	recordType := RecordTypeForIP(addr)
+	ip := addr.String()
 
 	// Look up an existing record matching both name and type. Cloudflare allows
 	// an A and an AAAA at the same name; we update only the one whose family

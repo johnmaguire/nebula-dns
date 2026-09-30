@@ -31,7 +31,14 @@ type AppConfig struct {
 	// "network" only deletes A records whose IP falls within the DN network CIDR.
 	Prune string `toml:"prune" envconfig:"NEBULA_DNS_PRUNE"`
 
-	// Cloudflare is the configuration for the Cloudflare API.
+	// HostsFile is a path to write the records to in hosts(5) format, for a
+	// resolver that serves names from a local file (e.g. Blocky's
+	// hostsFile or CoreDNS's hosts plugin). The file always holds exactly the current eligible hosts,
+	// so it needs no pruning. Empty disables it.
+	HostsFile string `toml:"hosts_file" envconfig:"NEBULA_DNS_HOSTS_FILE"`
+
+	// Cloudflare is the configuration for the Cloudflare API. Leaving both
+	// fields empty disables Cloudflare.
 	Cloudflare CloudflareConfig `toml:"cloudflare"`
 
 	// Defined is the configuration for the Defined Networking API.
@@ -44,10 +51,14 @@ type CloudflareConfig struct {
 	ZoneName string `toml:"zone_name" envconfig:"NEBULA_DNS_CF_ZONE_NAME"`
 }
 
+func (c CloudflareConfig) enabled() bool {
+	return c.APIToken != "" || c.ZoneName != ""
+}
+
 type DefinedConfig struct {
 	APIToken string `toml:"api_token" envconfig:"NEBULA_DNS_DN_API_TOKEN"`
-	// NetworkID is the ID of the network in Defined Networking to monitor for
-	// hosts.
+	// NetworkID is the ID of the network in Defined Networking whose CIDRs
+	// bound "network" pruning. Required with Cloudflare.
 	NetworkID string `toml:"network_id" envconfig:"NEBULA_DNS_DN_NETWORK_ID"`
 }
 
@@ -63,32 +74,42 @@ func LoadConfig(path string) (*AppConfig, error) {
 		return nil, err
 	}
 
-	// Validate required fields
-	if err := config.validate(); err != nil {
-		return nil, err
-	}
-
 	// Default AppendSuffix to the zone name
 	if config.AppendSuffix == "" {
 		config.AppendSuffix = config.Cloudflare.ZoneName
+	}
+
+	// Validate required fields
+	if err := config.validate(); err != nil {
+		return nil, err
 	}
 
 	return config, nil
 }
 
 func (c *AppConfig) validate() error {
+	if !c.Cloudflare.enabled() && c.HostsFile == "" {
+		return fmt.Errorf("no output configured: set hosts_file and/or the cloudflare section")
+	}
+
 	var missing []string
-	if c.Cloudflare.APIToken == "" {
-		missing = append(missing, "cloudflare.api_token")
-	}
-	if c.Cloudflare.ZoneName == "" {
-		missing = append(missing, "cloudflare.zone_name")
-	}
 	if c.DefinedNet.APIToken == "" {
 		missing = append(missing, "definednet.api_token")
 	}
-	if c.DefinedNet.NetworkID == "" {
-		missing = append(missing, "definednet.network_id")
+	if c.Cloudflare.enabled() {
+		if c.Cloudflare.APIToken == "" {
+			missing = append(missing, "cloudflare.api_token")
+		}
+		if c.Cloudflare.ZoneName == "" {
+			missing = append(missing, "cloudflare.zone_name")
+		}
+		if c.DefinedNet.NetworkID == "" {
+			missing = append(missing, "definednet.network_id")
+		}
+	}
+	// Defaults to the zone name, so only a hosts-file-only config can lack it.
+	if c.AppendSuffix == "" {
+		missing = append(missing, "append_suffix")
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config fields: %s", strings.Join(missing, ", "))

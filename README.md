@@ -1,6 +1,6 @@
 # nebula-dns
 
-A script to create and delete [Cloudflare](https://cloudflare.com) DNS records pointing to [Defined Networking](https://defined.net) Managed Nebula nodes.
+A script to create and delete [Cloudflare](https://cloudflare.com) DNS records pointing to [Defined Networking](https://defined.net) Managed Nebula nodes, and/or to write them to a hosts file for a self-hosted resolver (e.g. Blocky's `hostsFile` or CoreDNS's `hosts` plugin).
 
 ## Development
 
@@ -20,15 +20,26 @@ All configuration can be provided via environment variables, making the config f
 
 | Variable | Description |
 |---|---|
+| `NEBULA_DNS_HOSTS_FILE` | Path to write records to in hosts(5) format |
 | `NEBULA_DNS_CF_API_TOKEN` | Cloudflare API token (`Zone:DNS:Edit` permission) |
 | `NEBULA_DNS_CF_ZONE_NAME` | Cloudflare DNS zone (e.g. `example.com`) |
 | `NEBULA_DNS_DN_API_TOKEN` | Defined Networking API token (`hosts:list` permission) |
-| `NEBULA_DNS_DN_NETWORK_ID` | Defined Networking network ID |
+| `NEBULA_DNS_DN_NETWORK_ID` | Defined Networking network ID (required with Cloudflare) |
 | `NEBULA_DNS_REQUIRED_TAGS` | Comma-separated list of required host tags |
 | `NEBULA_DNS_REQUIRED_SUFFIX` | Only register hosts with this hostname suffix |
 | `NEBULA_DNS_TRIM_SUFFIX` | Domain suffix to strip from DN hostname (e.g. `example.com`) |
-| `NEBULA_DNS_APPEND_SUFFIX` | Suffix to append to hostname (defaults to zone name) |
+| `NEBULA_DNS_APPEND_SUFFIX` | Suffix to append to hostname (defaults to zone name; required without Cloudflare) |
 | `NEBULA_DNS_PRUNE` | Prune mode: `none` (default), `all`, or `network` |
+
+### Outputs
+
+At least one output is required. Cloudflare is enabled by setting its API
+token and zone; the hosts file by setting `hosts_file`. With both, one run
+writes the same records to each.
+
+The hosts file is rewritten in full on every run, so it needs no pruning. It
+is replaced by rename, so a resolver in a container must mount its directory
+rather than the file itself.
 
 ### Docker
 

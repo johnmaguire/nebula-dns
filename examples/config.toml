@@ -10,14 +10,20 @@ required_suffix = ""
 trim_suffix = "example.com"
 # append_suffix will append the domain to the hostname (e.g. host will become
 # host.example.com.) This step occurs after trim_suffix, so you can convert
-# host.example.com to host.nebula.example.com, for example.
+# host.example.com to host.nebula.example.com, for example. Defaults to
+# cloudflare.zone_name; required without Cloudflare.
 append_suffix = "nebula.example.com"
 # prune controls whether and how stale DNS records are deleted.
 # "none" (default) - no pruning
 # "all" - delete any record under append_suffix without a matching DN host
 # "network" - only delete A records whose IP falls within the DN network CIDR
 prune = "network"
+# hosts_file writes the records to this path in hosts(5) format, for a
+# resolver that serves names from a file. Optional; at least one of
+# hosts_file and the cloudflare section is required.
+hosts_file = ""
 
+# Leave both fields empty to disable Cloudflare.
 [cloudflare]
 # api_token is the Cloudflare API token. It needs the `Zone:DNS:Edit`
 # permission for the zone specified in zone_name.
@@ -28,5 +34,6 @@ zone_name = ""
 [definednet]
 # api_token is the Defined.net API token. It needs the `hosts:list` permission.
 api_token = ""
-# network_id is the ID of the Defined.net network to get hosts from
+# network_id is the ID of the Defined.net network whose CIDRs bound "network"
+# pruning. Required with Cloudflare.
 network_id = ""

@@ -143,6 +143,28 @@ network_id = "net-123"
 	}
 }
 
+func TestLoadConfig_HostsFileOnly(t *testing.T) {
+	toml := `
+hosts_file = "/app/generated/mesh.hosts"
+append_suffix = "n.example.com"
+
+[definednet]
+api_token = "dn-token"
+`
+	path := writeConfigFile(t, toml)
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Cloudflare.enabled() {
+		t.Error("Cloudflare enabled without any cloudflare config")
+	}
+	if cfg.HostsFile != "/app/generated/mesh.hosts" {
+		t.Errorf("HostsFile = %q, want %q", cfg.HostsFile, "/app/generated/mesh.hosts")
+	}
+}
+
 func TestLoadConfig_ValidationErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -162,6 +184,15 @@ api_token = "cf-token"
 zone_name = "example.com"
 [definednet]
 api_token = "dn-token"
+`},
+		{"hosts file without append_suffix", `
+hosts_file = "/app/generated/mesh.hosts"
+[definednet]
+api_token = "dn-token"
+`},
+		{"hosts file without dn token", `
+hosts_file = "/app/generated/mesh.hosts"
+append_suffix = "n.example.com"
 `},
 		{"boolean trim_suffix", `
 trim_suffix = "true"
