@@ -1,6 +1,6 @@
 module github.com/johnmaguire/nebula-dns
 
-go 1.25.1
+go 1.26.11
 
 require (
 	github.com/BurntSushi/toml v1.3.2
