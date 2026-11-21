@@ -27,3 +27,26 @@ func TestTrimSuffix(t *testing.T) {
 		}
 	}
 }
+
+func TestUnderSuffix(t *testing.T) {
+	tests := []struct {
+		name   string
+		suffix string
+		want   bool
+	}{
+		{"host.n.example.com", "n.example.com", true},
+		{"a.b.n.example.com", "n.example.com", true},
+		{"host.n.example.com", "N.Example.com", true},
+		// Label boundary required
+		{"xn.example.com", "n.example.com", false},
+		// The suffix itself (possibly the zone apex) is never ours
+		{"n.example.com", "n.example.com", false},
+		{"example.com", "example.com", false},
+	}
+
+	for _, tt := range tests {
+		if got := underSuffix(tt.name, tt.suffix); got != tt.want {
+			t.Errorf("underSuffix(%q, %q) = %v, want %v", tt.name, tt.suffix, got, tt.want)
+		}
+	}
+}

@@ -217,7 +217,7 @@ func syncCloudflare(cfg *AppConfig, records []HostRecord) error {
 			Msg("Pruning Cloudflare DNS records")
 
 		err := IterateRecords(cf, zoneID, func(r Record) error {
-			if !strings.HasSuffix(r.Name, cfg.AppendSuffix) {
+			if !underSuffix(r.Name, cfg.AppendSuffix) {
 				return nil
 			}
 
@@ -270,6 +270,14 @@ func syncCloudflare(cfg *AppConfig, records []HostRecord) error {
 	}
 
 	return nil
+}
+
+// underSuffix reports whether name is a strict subdomain of suffix. The label
+// boundary keeps append_suffix "n.example.com" from claiming xn.example.com,
+// and the suffix itself is excluded because records are only ever created
+// beneath it (it may be the zone apex).
+func underSuffix(name, suffix string) bool {
+	return strings.HasSuffix(strings.ToLower(name), "."+strings.ToLower(suffix))
 }
 
 // trimSuffix removes suffix (leading dot optional) and its joining dot from
