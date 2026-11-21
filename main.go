@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/mail"
 	"net/netip"
@@ -190,24 +191,18 @@ func syncCloudflare(cfg *AppConfig, records []HostRecord) error {
 	}
 	log.Info().Strs("networkCIDRs", cidrStrs).Msgf("Found network CIDRs for network %s", cfg.DefinedNet.NetworkID)
 
-	// Track managed records by (hostname, recordType) so pruning can delete
-	// stale records (e.g. an AAAA at a name whose host no longer has an IPv6
-	// address).
-	managed := map[string]map[string]struct{}{}
+	// A failed record does not stop the others; errs fails the run at the end.
+	var errs []error
+	managed := managedTypes(records)
 	for _, r := range records {
 		log.Info().Str("hostname", r.Name).Msg("Creating Cloudflare DNS records")
 
-		types := map[string]struct{}{}
 		for _, ip := range r.IPs {
-			recordType, err := CreateRecord(cf, zoneID, r.Name, ip)
-			if err != nil {
-				// TODO: Log the error and continue
-				return fmt.Errorf("failed to create record for %s -> %s: %w", r.Name, ip, err)
+			if err := CreateRecord(cf, zoneID, r.Name, ip); err != nil {
+				log.Error().Err(err).Str("hostname", r.Name).Stringer("ip", ip).Msg("Failed to create record")
+				errs = append(errs, fmt.Errorf("failed to create record for %s -> %s: %w", r.Name, ip, err))
 			}
-			types[recordType] = struct{}{}
 		}
-
-		managed[r.Name] = types
 	}
 
 	// For any records within the target zone that do not have a corresponding
@@ -259,17 +254,36 @@ func syncCloudflare(cfg *AppConfig, records []HostRecord) error {
 				Msg("Pruning stale DNS record")
 
 			if err := DeleteRecord(cf, zoneID, r.ID); err != nil {
-				return fmt.Errorf("failed to delete record: %w", err)
+				log.Error().Err(err).Str("recordID", r.ID).Str("recordName", r.Name).Msg("Failed to prune record")
+				errs = append(errs, fmt.Errorf("failed to prune %s: %w", r.Name, err))
 			}
 
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("error during host prune iteration: %w", err)
+			errs = append(errs, fmt.Errorf("error during host prune iteration: %w", err))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
+}
+
+// managedTypes returns the record types wanted at each hostname, so pruning
+// can delete stale records (e.g. an AAAA at a name whose host no longer has an
+// IPv6 address). It is derived from the desired records rather than the
+// successful writes, so a record that could not be refreshed is not pruned,
+// and types accumulate because several DN hosts can map to one name.
+func managedTypes(records []HostRecord) map[string]map[string]struct{} {
+	managed := map[string]map[string]struct{}{}
+	for _, r := range records {
+		if managed[r.Name] == nil {
+			managed[r.Name] = map[string]struct{}{}
+		}
+		for _, ip := range r.IPs {
+			managed[r.Name][RecordTypeForIP(ip)] = struct{}{}
+		}
+	}
+	return managed
 }
 
 // underSuffix reports whether name is a strict subdomain of suffix. The label

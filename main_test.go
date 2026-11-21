@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net/netip"
+	"testing"
+)
 
 func TestTrimSuffix(t *testing.T) {
 	tests := []struct {
@@ -47,6 +50,19 @@ func TestUnderSuffix(t *testing.T) {
 	for _, tt := range tests {
 		if got := underSuffix(tt.name, tt.suffix); got != tt.want {
 			t.Errorf("underSuffix(%q, %q) = %v, want %v", tt.name, tt.suffix, got, tt.want)
+		}
+	}
+}
+
+func TestManagedTypes_AccumulatesAcrossHostsSharingAName(t *testing.T) {
+	managed := managedTypes([]HostRecord{
+		{Name: "db.example.com", IPs: []netip.Addr{netip.MustParseAddr("10.0.0.1")}},
+		{Name: "db.example.com", IPs: []netip.Addr{netip.MustParseAddr("fd00::1")}},
+	})
+
+	for _, recordType := range []string{"A", "AAAA"} {
+		if _, ok := managed["db.example.com"][recordType]; !ok {
+			t.Errorf("managed[db.example.com] lacks %s: %v", recordType, managed)
 		}
 	}
 }
